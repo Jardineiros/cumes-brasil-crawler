@@ -1,8 +1,10 @@
 const ScraperService = require('../services/scraperService');
 const CsvService = require('../services/csvService');
+const CroquiService = require('../services/croquiService');
 const Via = require('../models/Via');
 const logger = require('../services/logger');
 const fs = require('fs');
+const path = require('path');
 
 const headers = [
     'id', 'nome', 'grau', 'crux', 'artificial', 'duracao', 'exposicao', 'extensao',
@@ -13,6 +15,7 @@ class BugimCrawler {
     constructor() {
         this.scraper = new ScraperService();
         this.csvService = new CsvService('vias.csv', headers);
+        this.croquiService = new CroquiService();
     }
 
     async scrape() {
@@ -27,23 +30,19 @@ class BugimCrawler {
 
             logger.info('Clicando na lupinha da segunda linha...');
             const secondRowSelector = 'tr:nth-of-type(2) img.IMGPC1CSS';
-            await page.waitForSelector(secondRowSelector, { timeout: 10000 });
+            await page.waitForSelector(secondRowSelector, { timeout: 20000 });
             await page.click(secondRowSelector);
 
             logger.info('Esperando a página de detalhes carregar...');
-            await page.waitForTimeout(5000); // Adiciona um tempo de espera extra para garantir carregamento
-            await page.waitForFunction(() => document.querySelectorAll('td font').length > 10, { timeout: 20000 });
-
-            // Capturar HTML para debug
-            const pageContent = await page.content();
-            fs.writeFileSync('page-details.html', pageContent, 'utf8');
-            logger.info('HTML da página de detalhes salvo.');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await page.waitForFunction(() => document.querySelectorAll('td font').length > 10, { timeout: 30000 });
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Extração de dados
             const detalhesVia = await page.evaluate(() => {
-                const getText = (index) => {
-                    const elements = document.querySelectorAll('td font');
-                    return elements[index] ? elements[index].innerText.trim() : 'Não disponível';
+                const getText = (xpath) => {
+                    const element = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                    return element ? element.innerText.trim() : 'Não disponível';
                 };
 
                 const getImages = () => {
@@ -53,19 +52,22 @@ class BugimCrawler {
 
                 return {
                     id: 1, // ID fixo
-                    nome: getText(0),
-                    grau: getText(1),
-                    duracao: getText(2),
-                    artificial: getText(3),
-                    montanha: getText(5),
-                    conquistadores: getText(6),
-                    data: getText(7),
-                    detalhes: getText(9),
+                    nome: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[1]/tbody/tr/td[1]/font/b'),
+                    grau: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[1]/td/font'),
+                    duracao: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[2]/td/font'),
+                    artificial: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[3]/td/font'),
+                    montanha: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[5]/td/font'),
+                    conquistadores: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[7]/td/font'),
+                    data: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[8]/td/font'),
+                    detalhes: getText('/html/body/form[1]/table[2]/tbody/tr/td[2]/table[2]/tbody/tr[10]/td/font'),
                     imagem: getImages()
                 };
             });
 
-            logger.info('Dados extraídos:', detalhesVia);
+            // Baixar croqui usando CroquiService
+            if (detalhesVia.imagem) {
+                await this.croquiService.downloadCroqui(detalhesVia.imagem, detalhesVia.nome);
+            }
 
             // Salvar no CSV
             await this.csvService.writeData([new Via(detalhesVia)]);
