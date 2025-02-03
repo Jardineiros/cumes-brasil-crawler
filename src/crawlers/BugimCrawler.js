@@ -5,21 +5,8 @@ const logger = require('../services/logger');
 const fs = require('fs');
 
 const headers = [
-    'id',
-    'nome',
-    'grau',
-    'crux',
-    'artificial',
-    'duracao',
-    'exposicao',
-    'extensao',
-    'conquistadores',
-    'detalhes',
-    'data',
-    'montanha',
-    'face',
-    'fonte',
-    'imagem',
+    'id', 'nome', 'grau', 'crux', 'artificial', 'duracao', 'exposicao', 'extensao',
+    'conquistadores', 'detalhes', 'data', 'montanha', 'face', 'fonte', 'imagem'
 ];
 
 class BugimCrawler {
@@ -35,69 +22,53 @@ class BugimCrawler {
         try {
             logger.info('Acessando página principal...');
             await page.goto('https://care53.grupounicad.com.br:334/H~unh2RT09IcL5PpMvvqEx03rBm/', {
-                waitUntil: 'networkidle2',
+                waitUntil: 'networkidle2'
             });
 
             logger.info('Clicando na lupinha da segunda linha...');
             const secondRowSelector = 'tr:nth-of-type(2) img.IMGPC1CSS';
-            await page.waitForSelector(secondRowSelector);
+            await page.waitForSelector(secondRowSelector, { timeout: 10000 });
             await page.click(secondRowSelector);
 
             logger.info('Esperando a página de detalhes carregar...');
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await page.waitForTimeout(5000); // Adiciona um tempo de espera extra para garantir carregamento
+            await page.waitForFunction(() => document.querySelectorAll('td font').length > 10, { timeout: 20000 });
 
-            // Capturar o HTML para inspeção
+            // Capturar HTML para debug
             const pageContent = await page.content();
             fs.writeFileSync('page-details.html', pageContent, 'utf8');
-            logger.info('HTML da página de detalhes salvo como page-details.html.');
+            logger.info('HTML da página de detalhes salvo.');
 
             // Extração de dados
             const detalhesVia = await page.evaluate(() => {
-                const getText = (selector) => {
-                    try {
-                        const element = document.querySelector(selector);
-                        const value = element ? element.textContent.trim() : 'Não disponível';
-                        console.log(`Valor extraído para [${selector}]:`, value);
-                        return value;
-                    } catch (error) {
-                        console.error(`Erro ao buscar o seletor: ${selector}`, error);
-                        return 'Não disponível';
-                    }
+                const getText = (index) => {
+                    const elements = document.querySelectorAll('td font');
+                    return elements[index] ? elements[index].innerText.trim() : 'Não disponível';
                 };
 
                 const getImages = () => {
-                    try {
-                        const images = Array.from(
-                            document.querySelectorAll('table img[src*="Anexos"]')
-                        ).map((img) => img.src);
-                        console.log('Imagens encontradas:', images);
-                        return images;
-                    } catch (error) {
-                        console.error('Erro ao buscar imagens:', error);
-                        return [];
-                    }
+                    return Array.from(document.querySelectorAll('table img[src*="Anexos"]'))
+                        .map((img) => img.src).join(';');
                 };
 
                 return {
-                    id: 1, // ID fixo por enquanto
-                    nome: getText('table:nth-of-type(2) font[size="3"]'),
-                    grau: getText('font:contains("Graduação:")'),
-                    duracao: getText('font:contains("Tamanho:")'),
-                    artificial: getText('font:contains("Tipo de Proteção:")'),
-                    montanha: getText('font:contains("Montanha:")'),
-                    conquistadores: getText('font:contains("Conquistadores:")'),
-                    data: getText('font:contains("Data da Conquista:")'),
-                    detalhes: getText('font:contains("Descrição:")'),
-                    imagem: getImages().join(';'),
+                    id: 1, // ID fixo
+                    nome: getText(0),
+                    grau: getText(1),
+                    duracao: getText(2),
+                    artificial: getText(3),
+                    montanha: getText(5),
+                    conquistadores: getText(6),
+                    data: getText(7),
+                    detalhes: getText(9),
+                    imagem: getImages()
                 };
             });
 
             logger.info('Dados extraídos:', detalhesVia);
 
             // Salvar no CSV
-            const via = new Via(detalhesVia);
-            await this.csvService.writeData([via]);
-
+            await this.csvService.writeData([new Via(detalhesVia)]);
             logger.info('Dados salvos no CSV.');
         } catch (error) {
             logger.error(`Erro ao extrair dados: ${error.message}`);

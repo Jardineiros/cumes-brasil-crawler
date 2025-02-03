@@ -1,6 +1,6 @@
-const Care53Crawler = require('./crawlers/BugimCrawler.js');
+const BugimCrawler = require('./crawlers/BugimCrawler.js');
 
 (async () => {
-    const crawler = new Care53Crawler();
+    const crawler = new BugimCrawler();
     await crawler.scrape();
 })();
