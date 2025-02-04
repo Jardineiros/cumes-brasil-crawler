@@ -8,7 +8,6 @@ class BugimCrawler {
     constructor() {
         this.scraper = new ScraperService();
         this.croquiService = new CroquiService();
-        this.croquiPath = path.resolve(__dirname, '../croquis');
 
         // Inicializando o DataService para CSV e TXT
         this.dataService = new DataService(
@@ -51,7 +50,7 @@ class BugimCrawler {
         const lupaSelectors = await page.$$eval(
             'img[class^="IMGPC"]',
             (lupas, maxVias) => lupas.slice(0, maxVias).map(lupa => `.${lupa.className}`),
-            quantidadeVias // Passa explicitamente a variável
+            quantidadeVias
         );
         logger.info(`Total de vias encontradas: ${lupaSelectors.length}`);
         return lupaSelectors;
@@ -68,7 +67,7 @@ class BugimCrawler {
 
             const detalhesVia = await this._extrairDetalhes(page);
 
-            // Baixar croquis, se houver
+            // Baixar croquis e salvar na pasta correta
             detalhesVia.croquis = await this._baixarCroquis(detalhesVia.nome, detalhesVia.croquis);
 
             await this.dataService.saveToCsv(detalhesVia);
@@ -111,29 +110,15 @@ class BugimCrawler {
     }
 
     async _baixarCroquis(nomeVia, urlsCroquis) {
-        let croquisSalvos = [];
-
-        for (let i = 0; i < urlsCroquis.length; i++) {
-            try {
-                const croquiFilename = `${this._sanitizeFileName(nomeVia)}_${String(i + 1).padStart(2, '0')}.jpg`;
-                await this.croquiService.downloadCroqui(urlsCroquis[i], croquiFilename);
-                croquisSalvos.push(croquiFilename);
-            } catch (error) {
-                logger.error(`Erro ao baixar croqui ${urlsCroquis[i]}: ${error.message}`);
-            }
-        }
-
-        return croquisSalvos;
+        return Promise.all(urlsCroquis.map((url, index) =>
+            this.croquiService.downloadCroqui(url, nomeVia, index + 1)
+        ));
     }
 
     async _voltarParaPaginaPrincipal(page) {
         const backButtonSelector = 'img.IMGVOLTA1CSS';
         await page.waitForSelector(backButtonSelector, { timeout: 10000 });
         await page.click(backButtonSelector);
-    }
-
-    _sanitizeFileName(name) {
-        return name.replace(/[<>:"/\\|?*]+/g, '').replace(/\s+/g, '_').trim();
     }
 }
 

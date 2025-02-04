@@ -1,6 +1,6 @@
 const ScraperService = require('../services/scraperService');
 const CsvService = require('../services/csvService');
-const CroquiService = require('../services/croquiService');
+const CroquiService = require('../services/CroquiService');
 const Via = require('../models/Via');
 const logger = require('../services/logger');
 const path = require('path');
