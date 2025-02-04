@@ -13,7 +13,7 @@ class CroquiService {
 
     async downloadCroqui(imageUrl, nomeVia) {
         try {
-            const imagePath = path.join(this.croquisDir, `${nomeVia.replace(/\s+/g, '_')}.jpg`);
+            const imagePath = path.join(this.croquisDir, `${nomeVia.replace(/\s+/g, '_')}`);
             const response = await axios({ url: imageUrl, responseType: 'stream' });
             response.data.pipe(fs.createWriteStream(imagePath));
             logger.info(`Imagem salva em: ${imagePath}`);
